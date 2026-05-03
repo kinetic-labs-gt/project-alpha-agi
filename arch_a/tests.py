@@ -1,7 +1,7 @@
 from __future__ import annotations
 import torch
 from arch_a import ArchAConfig, ArchAForCausalLM
-from arch_a.quantization import ShadowResidualQuantizer, PolarQuantizer
+from arch_a.quantization import ShadowResidualQuantizer, TurboQuantizer
 from arch_a.training import (ScaleOptimizer, project_gradients_galore2,
                               spectral_renormalize_model,
                               blockwise_mxfp8_quantize, blockwise_mxfp8_dequantize)
@@ -24,9 +24,9 @@ def run():
     qz = ShadowResidualQuantizer(bits=4)
     q, r, s, shape = qz.quantize(torch.randn(3, 17))
     assert qz.dequantize(q, r, s, shape).shape == (3, 17)
-    pq = PolarQuantizer(bits=4)
-    q2, s2, sh2 = pq.quantize(torch.randn(4, 16))
-    assert pq.dequantize(q2, s2, sh2).shape == (4, 16)
+    tq = TurboQuantizer(bits=4, group_size=16)
+    tq_q, tq_s, tq_z, tq_shape = tq.quantize(torch.randn(4, 33))
+    assert tq.dequantize(tq_q, tq_s, tq_z, tq_shape).shape == (4, 33)
     tensor = torch.randn(4, 64)
     q3, s3, sh3 = blockwise_mxfp8_quantize(tensor, block_size=32)
     assert blockwise_mxfp8_dequantize(q3, s3, sh3, block_size=32).shape == tensor.shape

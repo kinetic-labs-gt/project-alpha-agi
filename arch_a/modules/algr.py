@@ -173,8 +173,10 @@ class ALGRController(nn.Module):
             meta_conf.append(curr_conf)
 
         if meta_entropy:
-            # Transfer all metrics to CPU in a single batch to avoid multiple sync points
-            all_metrics = torch.stack(meta_entropy + meta_conf).detach().cpu().tolist()
+            # Transfer all metrics to CPU in a single batch to avoid multiple sync points.
+            # We move them to a common device (x.device) before stacking to handle multi-GPU sharding.
+            target_dev = x.device
+            all_metrics = torch.stack([m.to(target_dev) for m in meta_entropy + meta_conf]).detach().cpu().tolist()
             half = len(all_metrics) // 2
             meta_entropy = all_metrics[:half]
             meta_conf = all_metrics[half:]

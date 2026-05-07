@@ -79,6 +79,7 @@ class ArchAModel(nn.Module):
             layer.to(dev)
             map_list.append(dev)
         self.controller.device_map = map_list
+        self.controller.halt_head.to(devices[0])
         self.token_embedding.to(devices[0])
         self.final_norm.to(devices[-1])
         self.nadd_decoder.to(devices[-1])
@@ -183,7 +184,7 @@ class ArchAModel(nn.Module):
         return seq
 
     @torch.no_grad()
-    def generate_nadd(self, input_ids: torch.Tensor, steps: Optional[int] = None):
+    def generate_nadd(self, input_ids: torch.Tensor):
         self.eval()
         hidden, _, _ = self.forward_backbone(input_ids, training=False)
         # NADDDecoder internally applies `steps` passes over its refiners.

@@ -34,6 +34,8 @@ class KernelDispatcher:
         return self.backend in {"cuda", "mps", "rocm", "xla"}
 
     def maybe_compile(self, module):
+        if not self.supports_amp:
+            return module
         try:
             return torch.compile(module)
         except Exception:

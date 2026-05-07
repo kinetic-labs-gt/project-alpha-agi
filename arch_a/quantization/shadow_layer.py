@@ -26,9 +26,10 @@ class ShadowResidualQuantizer:
         return q.to(torch.int8), residual, scale.to(torch.float16), orig_shape
 
     def dequantize(self, q: torch.Tensor, residual: torch.Tensor, scale: torch.Tensor, orig_shape):
+        import math
         qf = q.to(torch.float32)
         rf = residual.to(torch.float32)
         out = (qf / max(1, 2 ** (self.bits - 1) - 1)) * scale.to(torch.float32)
         out = out + 0.125 * rf * scale.to(torch.float32)
-        flat = out.flatten()[: int(torch.tensor(orig_shape).prod())]
+        flat = out.flatten()[: math.prod(orig_shape)]
         return flat.view(*orig_shape)

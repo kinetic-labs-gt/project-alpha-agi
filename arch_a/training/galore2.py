@@ -32,4 +32,5 @@ def project_gradients_galore2(model: torch.nn.Module, rank: int = 8, min_numel: 
         if p.grad is None:
             continue
         if p.grad.ndim == 2 and p.numel() >= min_numel:
-            p.grad = _low_rank_project(p.grad, rank)
+            projected = _low_rank_project(p.grad, rank)
+            p.grad.data.copy_(projected)

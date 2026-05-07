@@ -1,5 +1,6 @@
 
 from __future__ import annotations
+import math
 import torch
 
 def blockwise_mxfp8_quantize(x: torch.Tensor, block_size: int = 32, eps: float = 1e-6):
@@ -23,5 +24,5 @@ def blockwise_mxfp8_quantize(x: torch.Tensor, block_size: int = 32, eps: float =
 def blockwise_mxfp8_dequantize(q: torch.Tensor, scale: torch.Tensor, orig_shape, block_size: int = 32):
     qf = q.to(torch.float32)
     blocks = (qf / 127.0) * scale.to(torch.float32)
-    flat = blocks.flatten()[: int(torch.tensor(orig_shape).prod())]
+    flat = blocks.flatten()[: math.prod(orig_shape)]
     return flat.view(*orig_shape)

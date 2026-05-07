@@ -100,3 +100,50 @@ This was disconnected from the PyTorch computation graph. The optimizer could no
 
 ---
 **Status:** All flaws resolved. `arch_a` test suite passing securely. Architecture verified against original NADD and ALGR blueprints.
+
+## 10. P1 Bug: Dead NADD Generation Parameter
+**Component:** `arch_a/model.py` (`generate_nadd`)
+
+**The Bug (Codex v3):** The `generate_nadd` method accepted a `steps` argument, but it was disconnected from the actual evaluation depth. The architecture was silently deferring to the inner decoder parameter instead, violating the API contract.
+
+**The Fix:** We stripped the unused `steps` parameter entirely from the `generate_nadd` method signature. This ensures the caller understands that configuration governs the iterations, cleanly decoupling generation scripts.
+
+## 11. P2 Bug: ALGR Distributed Ping-Pong
+**Component:** `arch_a/model.py` (`shard_to_devices`)
+
+**The Bug (Codex v3):** When placing the model across devices using pipeline parallelism (`shard_to_devices`), the `ALGRController.halt_head` was never allocated to a target GPU. This left the halting head on the CPU. At runtime, the ALGR loop was transferring intermediate pooled states from GPU VRAM to the CPU RAM just to compute halting logits, creating an unacceptable latency ping-pong effect.
+
+**The Fix:** We updated `shard_to_devices` to explicitly map `self.controller.halt_head` to `devices[0]`. The forward loop was modified to locally cast to this target GPU explicitly, safely skipping the PCIe bottleneck.
+
+## 12. P1 Bug: ALGR Over-Compute on Hard Samples
+**Component:** `arch_a/modules/algr.py`
+
+**The Bug (Codex v3):** The `ALGRController` previously forced *all* elements in a batch to continue looping until the *hardest* sample crossed the `confidence_threshold`. This meant simple reasoning tasks were over-computing massively if paired with a complex task in the same batch.
+
+**The Fix:** We decoupled the sequence halting by instituting an `active_mask`. The loop now applies `torch.where` to conditionally update the `x` tensor and `ssm_states`. Any sequence that crosses the threshold has its processing safely halted and frozen while the remaining harder sequences continue computing.
+
+## 13. P2 Bug: Galore Gradient Destructive Re-Binding
+**Component:** `arch_a/training/galore2.py`
+
+**The Bug (Codex v3):** The `project_gradients_galore2` function mutated PyTorch memory directly using `p.grad = ...`. This behavior forcefully breaks the memory pointers established by FSDP, DDP, and mixed-precision optimizers, causing silent gradient sync failures across nodes.
+
+**The Fix:** The hook was refactored to calculate the gradient and then inject the result in-place using `p.grad.data.copy_(projected)`, preserving the original tensor memory bindings.
+
+## 14. P2 Bug: Spectron Random Normalization Jitter
+**Component:** `arch_a/training/spectron.py`
+
+**The Bug (Codex v3):** During orthonormalization, the `_spectral_norm_estimate` function instantiated a random `u = torch.randn(...)` eigen vector array every single forward pass. This introduced extreme mathematical jitter into the sigma estimation, degrading convergence stability during ALGR training.
+
+**The Fix:** A persistent `_SPECTRON_STATE` dictionary was implemented, keyed by the parameter `id(p)`. This caches the `u` vector globally, ensuring robust and smooth power iterations over sequential training steps.
+
+## 15. P2 Bug: MXFP8 Tight-Loop Friction
+**Component:** `arch_a/training/mxfp8.py`
+
+**The Bug (Codex v3):** The `blockwise_mxfp8_dequantize` operation repeatedly evaluated `int(torch.tensor(orig_shape).prod())`. Because it built and multiplied a tensor on the CPU during the hottest execution loop inside the model, it induced significant overhead.
+
+**The Fix:** The PyTorch wrapper was replaced with native Python `math.prod(orig_shape)`, removing the device allocation latency.
+
+## 16. Feature Improvement: KernelDispatcher Fallback Protection
+**Component:** `arch_a/kernels/dispatcher.py`
+
+**The Fix:** The `maybe_compile` routing was patched to first check if `supports_amp` is true for the environment. If it is running on a raw CPU setup without optimization, it prevents `torch.compile` from inducing harsh startup penalties when the backend is unsupported.

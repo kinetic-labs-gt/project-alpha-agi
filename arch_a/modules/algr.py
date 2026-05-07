@@ -114,8 +114,28 @@ class ALGRController(nn.Module):
             entropy = 0.0
             halt_head_dev = next(self.halt_head.parameters()).device
 
+            # Mask tracking which batch items have halted
+            bsz = x.size(0)
+            active_mask = torch.ones(bsz, dtype=torch.bool, device=x.device)
+
             while True:
-                x, ssm_states[i] = layer(x, ssm_states[i], loop_idx=loops)
+                x_next, ssm_next = layer(x, ssm_states[i], loop_idx=loops)
+
+                # Update only sequences that haven't halted yet
+                x = torch.where(active_mask.unsqueeze(-1).unsqueeze(-1), x_next, x)
+                ssm_h_next, ssm_summary_next = ssm_next
+
+                if ssm_states[i] is None:
+                    # If this is the very first loop pass and ssm_states[i] was initialized as None
+                    ssm_h_curr = torch.zeros_like(ssm_h_next)
+                    ssm_summary_curr = torch.zeros_like(ssm_summary_next)
+                else:
+                    ssm_h_curr, ssm_summary_curr = ssm_states[i]
+
+                ssm_h = torch.where(active_mask.unsqueeze(-1), ssm_h_next, ssm_h_curr)
+                ssm_summary = torch.where(active_mask.unsqueeze(-1), ssm_summary_next, ssm_summary_curr)
+                ssm_states[i] = (ssm_h, ssm_summary)
+
                 pooled = x.float().mean(dim=1)
                 # Temporarily cast pooled vector to halt_head's device, avoiding parameter migration
                 if pooled.device != halt_head_dev:
@@ -137,8 +157,11 @@ class ALGRController(nn.Module):
                 # the probability of continuing. So we penalize (1.0 - prob.mean())
                 penalty_tensors.append(1.0 - prob.mean())
 
+                # Update active mask: items where prob >= threshold become inactive (False)
+                active_mask = active_mask & (prob < self.confidence_threshold)
+
                 loops += 1
-                if (prob >= self.confidence_threshold).all() or loops >= self.max_loops:
+                if not active_mask.any() or loops >= self.max_loops:
                     halted = True
                     break
             meta_loops.append(loops)

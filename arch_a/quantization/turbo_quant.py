@@ -41,10 +41,11 @@ class TurboQuantizer:
         return q, scale.to(torch.float16), zero_point.to(torch.uint8), orig_shape
 
     def dequantize(self, q: torch.Tensor, scale: torch.Tensor, zero_point: torch.Tensor, shape):
+        import math
         qf = q.to(torch.float32)
         zf = zero_point.to(torch.float32)
         sf = scale.to(torch.float32)
 
         flat = (qf - zf) * sf
-        flat = flat.flatten()[: int(torch.tensor(shape).prod())]
+        flat = flat.flatten()[: math.prod(shape)]
         return flat.view(*shape)

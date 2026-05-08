@@ -40,8 +40,10 @@ class AlphaWindow(nn.Module):
         self.residual_fp32 = residual_fp32
         self.summary_dim = summary_dim
 
-        assert d_model == n_heads * d_head, "d_model must equal n_heads * d_head"
-        assert n_heads % n_kv_heads == 0, "n_heads must be divisible by n_kv_heads"
+        if d_model != n_heads * d_head:
+            raise ValueError(f"d_model ({d_model}) must equal n_heads * d_head ({n_heads * d_head})")
+        if n_heads % n_kv_heads != 0:
+            raise ValueError(f"n_heads ({n_heads}) must be divisible by n_kv_heads ({n_kv_heads})")
         self.n_rep = n_heads // n_kv_heads
 
         self.norm1 = RMSNorm(d_model, norm_eps)

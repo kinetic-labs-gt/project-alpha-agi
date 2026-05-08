@@ -1,4 +1,4 @@
-# Project Alpha AGI
+# Project-Alpha-AGI
 
 Project Alpha AGI is an experimental architecture focused on reasoning quality, cost efficiency, and hardware portability.
 

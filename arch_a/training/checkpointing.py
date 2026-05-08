@@ -79,7 +79,7 @@ class CheckpointManager:
 
     def load_checkpoint(self, checkpoint_path: str, model: torch.nn.Module, optimizer: Optional[torch.optim.Optimizer] = None, scheduler: Optional[Any] = None) -> Dict[str, Any]:
         """Loads a full checkpoint state."""
-        state = torch.load(checkpoint_path, map_location="cpu")
+        state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
         model_to_load = model.module if hasattr(model, 'module') else model
         model_to_load.load_state_dict(state["model_state_dict"])

@@ -2,7 +2,7 @@ name: Alpha-AGI CI
 
 on:
   push:
-    branches: [ "Jules", "main" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 

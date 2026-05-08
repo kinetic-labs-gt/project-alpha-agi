@@ -20,14 +20,16 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        elif [ -f Requirements.txt ]; then
-          pip install -r Requirements.txt
+        REQ_FILE="$(find . -maxdepth 1 -type f -iname 'requirements.txt' -printf '%f\n' | head -n 1)"
+        if [ -n "$REQ_FILE" ]; then
+          pip install -r "$REQ_FILE"
         else
-          echo "No requirements file found (checked requirements.txt and Requirements.txt)."
+          echo "No requirements file found (case-insensitive match for requirements.txt)."
           ls -la
           exit 1
+        fi
+        if [ "$REQ_FILE" != "requirements.txt" ]; then
+          echo "Using dependency file '$REQ_FILE'; consider standardizing to 'requirements.txt'."
         fi
 
     - name: Run Core Architecture Tests

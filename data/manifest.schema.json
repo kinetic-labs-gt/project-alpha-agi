@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Alpha-AGI Data Manifest Specification",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "The raw textual content."
+    },
+    "source": {
+      "type": "string",
+      "description": "The origin of the text (e.g., wiki, book, crawl)."
+    },
+    "lang": {
+      "type": "string",
+      "description": "ISO language code (e.g., en, fr)."
+    },
+    "license": {
+      "type": "string",
+      "description": "License under which the text is provided."
+    },
+    "quality_score": {
+      "type": "number",
+      "description": "A heuristic score mapping text quality."
+    },
+    "dedup_hash": {
+      "type": "string",
+      "description": "SHA-256 hash used to strictly identify duplicate records."
+    }
+  },
+  "required": ["text", "source", "lang", "dedup_hash"]
+}

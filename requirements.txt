@@ -1,2 +1,8 @@
 torch
 numpy
+datasets
+tokenizers
+transformers
+wandb
+pyyaml
+tqdm

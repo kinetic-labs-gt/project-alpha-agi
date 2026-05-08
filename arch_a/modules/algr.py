@@ -120,6 +120,7 @@ class ALGRController(nn.Module):
 
             curr_conf = torch.tensor(0.0, device=x.device)
             curr_ent = torch.tensor(0.0, device=x.device)
+
             while True:
                 x_next, ssm_next = layer(x, ssm_states[i], loop_idx=loops)
 

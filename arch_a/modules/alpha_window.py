@@ -64,6 +64,11 @@ class AlphaWindow(nn.Module):
 
         self.rotary = RotaryEmbedding(d_head, base=rope_theta, max_seq_len=alpha_window)
         self.attn_dropout = attn_dropout
+        self.register_buffer(
+            "mask",
+            torch.ones(alpha_window, alpha_window, dtype=torch.bool).triu(1),
+            persistent=False,
+        )
 
     def _init_state(self, x: torch.Tensor) -> AlphaWindowState:
         bsz = x.size(0)
@@ -119,7 +124,7 @@ class AlphaWindow(nn.Module):
 
         # causal mask
         attn_scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(self.d_head)
-        mask = torch.ones(local_len, local_len, device=x.device, dtype=torch.bool).triu(1)
+        mask = self.mask[:local_len, :local_len]
         attn_scores = attn_scores.masked_fill(mask.view(1, 1, local_len, local_len), float("-inf"))
         attn_probs = torch.softmax(attn_scores.float(), dim=-1).to(q.dtype)
         if self.attn_dropout and self.training:

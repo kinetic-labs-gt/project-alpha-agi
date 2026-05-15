@@ -18,7 +18,9 @@ class CheckpointManager:
         scheduler: Any,
         global_step: int,
         config_dict: Dict[str, Any],
-        val_loss: float
+        val_loss: float,
+        scaler: Optional[torch.cuda.amp.GradScaler] = None,
+        loader_state: Optional[Dict[str, Any]] = None
     ):
         """Saves a checkpoint containing full state for exact resumption."""
         checkpoint_name = f"step_{global_step}_loss_{val_loss:.4f}.pt"
@@ -31,6 +33,8 @@ class CheckpointManager:
             "model_state_dict": model_to_save.state_dict(),
             "optimizer_state_dict": optimizer.state_dict(),
             "scheduler_state_dict": scheduler.state_dict() if scheduler else None,
+            "scaler_state_dict": scaler.state_dict() if scaler else None,
+            "loader_state": loader_state,
             "global_step": global_step,
             "config": config_dict,
             "val_loss": val_loss,
@@ -77,7 +81,7 @@ class CheckpointManager:
             except OSError:
                 pass
 
-    def load_checkpoint(self, checkpoint_path: str, model: torch.nn.Module, optimizer: Optional[torch.optim.Optimizer] = None, scheduler: Optional[Any] = None) -> Dict[str, Any]:
+    def load_checkpoint(self, checkpoint_path: str, model: torch.nn.Module, optimizer: Optional[torch.optim.Optimizer] = None, scheduler: Optional[Any] = None, scaler: Optional[torch.cuda.amp.GradScaler] = None) -> Dict[str, Any]:
         """Loads a full checkpoint state."""
         state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
@@ -89,6 +93,9 @@ class CheckpointManager:
 
         if scheduler and state.get("scheduler_state_dict"):
             scheduler.load_state_dict(state["scheduler_state_dict"])
+
+        if scaler and state.get("scaler_state_dict"):
+            scaler.load_state_dict(state["scaler_state_dict"])
 
         if "rng_state_torch" in state:
             torch.set_rng_state(state["rng_state_torch"])

@@ -109,8 +109,11 @@ else:
     global_step = 0
     if args.resume and os.path.exists(args.resume):
         print(f"Resuming from checkpoint: {args.resume}")
-        state = ckpt_manager.load_checkpoint(args.resume, model, optimizer, scheduler)
+        state = ckpt_manager.load_checkpoint(args.resume, model, optimizer, scheduler, scaler)
         global_step = state.get("global_step", 0)
+        if "loader_state" in state and state["loader_state"] is not None:
+            train_loader.load_state_dict(state["loader_state"])
+            train_iter = iter(train_loader)
 
     # 7. Training Loop
     model.train()
@@ -128,7 +131,9 @@ else:
         batch_size, seq_len = batch.shape
 
         # Forward pass
-        with autocast(enabled=(train_config.mixed_precision in ['fp16', 'bf16'] and device.type == 'cuda')):
+        dtype_map = {'fp16': torch.float16, 'bf16': torch.bfloat16}
+        amp_dtype = dtype_map.get(train_config.mixed_precision, torch.float16)
+        with autocast(enabled=(train_config.mixed_precision in ['fp16', 'bf16'] and device.type == 'cuda'), dtype=amp_dtype):
             outputs = model(batch, labels=batch)
             loss = outputs.loss / train_config.grad_accum_steps
 
@@ -146,10 +151,16 @@ else:
             scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
+            scale_before = scaler.get_scale()
             scaler.step(optimizer)
             scaler.update()
+
+            # Only step the scheduler if optimizer actually stepped
+            # (i.e. scale was not decreased due to inf/nan gradients)
+            if scaler.get_scale() >= scale_before:
+                scheduler.step()
+
             optimizer.zero_grad()
-            scheduler.step()
 
             # Extract ALGR metadata if available
             algr_loops = 0.0
@@ -181,7 +192,9 @@ else:
                     scheduler=scheduler,
                     global_step=global_step,
                     config_dict=arch_config.to_dict(),
-                    val_loss=val_loss
+                    val_loss=val_loss,
+                    scaler=scaler,
+                    loader_state=train_loader.state_dict()
                 )
 
         global_step += 1

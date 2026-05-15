@@ -59,7 +59,7 @@ class ArchAConfig:
             nadd_steps=2, algr_max_loops=1
         )
 
-        @classmethod
+    @classmethod
     def for_20m(cls) -> "ArchAConfig":
         return cls(
             vocab_size=50257,          # GPT2 tokenizer vocab

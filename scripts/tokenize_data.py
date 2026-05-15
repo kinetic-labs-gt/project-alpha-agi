@@ -38,6 +38,13 @@ def tokenize_and_pack(input_path: str, output_prefix: str, tokenizer_name: str, 
                 fout.write(arr.tobytes())
                 total_chunks += 1
 
+        # Write remaining if buffer is not empty and we want to pad it out or keep it (for testing/demo purposes we pad with 0)
+        if len(buffer) > 0:
+            chunk = buffer + [0] * (max_seq_len - len(buffer))
+            arr = np.array(chunk, dtype=np.uint16)
+            fout.write(arr.tobytes())
+            total_chunks += 1
+
     # Write the index file summarizing the shard
     index_data = {
         "num_chunks": total_chunks,

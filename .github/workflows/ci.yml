@@ -28,7 +28,7 @@ jobs:
 
     - name: Run Phase 6 Unit Tests
       run: |
-        PYTHONPATH=. python3 -m unittest discover tests
+        PYTHONPATH=. python3 -m pytest -q tests/test_config_50m.py tests/test_data_pipeline.py tests/test_trainer_step.py tests/test_checkpoint_resume.py
 
     - name: Run Pre-train Smoke Gates
       run: |

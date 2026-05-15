@@ -47,5 +47,22 @@ class TestDataPipeline(unittest.TestCase):
         self.assertTrue(batch2.shape[0] <= 2)
         self.assertEqual(batch2.shape[1], 64)
 
+    def test_loader_state_dict(self):
+        loader = StreamingShardLoader([self.bin_path], batch_size=2, shuffle=False)
+        iterator = iter(loader)
+
+        batch1 = next(iterator)
+
+        state = loader.state_dict()
+
+        # New loader, same files, but load state
+        loader2 = StreamingShardLoader([self.bin_path], batch_size=2, shuffle=False)
+        loader2.load_state_dict(state)
+        iterator2 = iter(loader2)
+
+        batch2 = next(iterator2)
+
+        self.assertTrue(batch2.shape[0] <= 2)
+
 if __name__ == "__main__":
     unittest.main()

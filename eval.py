@@ -20,43 +20,71 @@ def eval_perplexity(model, dataloader, device, max_steps=100):
     ppl = math.exp(min(avg_loss, 20.0))
     return avg_loss, ppl
 
-def eval_structured_output(model, tokenizer, device):
+def eval_structured_output(model, tokenizer, device, num_prompts=5):
     """Sanity prompt to check structured JSON emission capability."""
-    prompt = 'Generate a JSON object representing a user:\n```json\n{"name":'
-    inputs = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
+    prompts = [
+        'Generate a JSON object representing a user:\n```json\n{"name":',
+        'Provide a JSON configuration:\n```json\n{"setting":',
+        'Create a JSON for a book:\n```json\n{"title":',
+        'Write JSON for a car:\n```json\n{"brand":',
+        'Output a JSON coordinate:\n```json\n{"x":'
+    ]
+    prompts = prompts[:num_prompts]
 
-    # Very basic greedy generation stub
+    valid_count = 0
+    results = []
+
     model.eval()
+
+    # Force deterministic decoding
+    old_state = torch.get_rng_state()
+    if torch.cuda.is_available():
+        old_cuda_state = torch.cuda.get_rng_state()
+    torch.manual_seed(42)
+
     with torch.no_grad():
-        generated = inputs
-        for _ in range(20):
-            out = model(generated)
-            next_token = out.logits[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
-            generated = torch.cat([generated, next_token], dim=-1)
+        for prompt in prompts:
+            inputs = tokenizer(prompt, return_tensors="pt").input_ids.to(device)
+            generated = inputs
+            for _ in range(20):
+                out = model(generated)
+                # Deterministic greedy decoding
+                next_token = out.logits[0, -1].argmax(dim=-1).unsqueeze(0).unsqueeze(0)
+                generated = torch.cat([generated, next_token], dim=-1)
 
-    text = tokenizer.decode(generated[0])
-    valid_json = False
-    try:
-        # Check if the model closed the braces logically
-        if '}' in text:
-            chunk = text.split('```json\n')[1].split('}')[0] + '}'
-            json.loads(chunk)
-            valid_json = True
-    except Exception:
-        pass
+            text = tokenizer.decode(generated[0])
+            valid_json = False
+            try:
+                if '}' in text and '```json\n' in text:
+                    chunk = text.split('```json\n')[1].split('}')[0] + '}'
+                    json.loads(chunk)
+                    valid_json = True
+                    valid_count += 1
+            except Exception:
+                pass
+            results.append({"prompt": prompt, "structured_text": text, "valid_json": valid_json})
 
-    return {"structured_text": text, "valid_json": valid_json}
+    torch.set_rng_state(old_state)
+    if torch.cuda.is_available():
+        torch.cuda.set_rng_state(old_cuda_state)
 
-def eval_needle_in_haystack(model, tokenizer, device, context_len=1024):
-    """Basic retrieval probe."""
+    validity_rate = valid_count / max(1, len(prompts))
+    return {"validity_rate": validity_rate, "results": results}
+
+def eval_needle_in_haystack(model, tokenizer, device, context_len=1024, insertion_pos="middle"):
+    """Long-context retrieval probe."""
     needle = "The secret password is 'arch_a_rules'."
     haystack = "The quick brown fox jumps over the lazy dog. " * (context_len // 10)
 
-    # Insert needle in the middle
-    midpoint = len(haystack) // 2
-    prompt = haystack[:midpoint] + needle + haystack[midpoint:]
-    question = "\nWhat is the secret password? The secret password is '"
+    if insertion_pos == "start":
+        prompt = needle + haystack
+    elif insertion_pos == "end":
+        prompt = haystack + needle
+    else:  # middle
+        midpoint = len(haystack) // 2
+        prompt = haystack[:midpoint] + needle + haystack[midpoint:]
 
+    question = "\nWhat is the secret password? The secret password is '"
     full_prompt = prompt + question
     inputs = tokenizer(full_prompt, return_tensors="pt").input_ids.to(device)
 
@@ -67,8 +95,16 @@ def eval_needle_in_haystack(model, tokenizer, device, context_len=1024):
         next_token_id = out.logits[0, -1].argmax(dim=-1).item()
         predicted_word = tokenizer.decode([next_token_id]).strip()
 
-    success = predicted_word.startswith("arch")
-    return {"retrieval_success": success, "predicted_word": predicted_word}
+    exact_match = predicted_word == "arch_a_rules"
+    contains_match = "arch" in predicted_word.lower()
+
+    return {
+        "exact_match": exact_match,
+        "contains_match": contains_match,
+        "predicted_word": predicted_word,
+        "context_len": context_len,
+        "insertion_pos": insertion_pos
+    }
 
 if __name__ == "__main__":
     print("Evaluation harness ready. To use, import these functions into the trainer.")

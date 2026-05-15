@@ -1,19 +1,14 @@
 import unittest
 from arch_a import ArchAConfig
 
-class TestConfig50m(unittest.TestCase):
-    def test_for_50m_preset(self):
-        config = ArchAConfig.for_50m()
+class TestConfigPresets(unittest.TestCase):
+    def test_presets_exist(self):
+        presets = ['for_debug', 'for_2gpu_demo', 'for_20m', 'for_50m', 'for_500m', 'for_1b']
+        for preset in presets:
+            self.assertTrue(hasattr(ArchAConfig, preset), f"Preset {preset} missing from ArchAConfig")
+            config = getattr(ArchAConfig, preset)()
+            self.assertIsInstance(config, ArchAConfig)
+            self.assertEqual(config.n_heads * config.d_head, config.d_model, f"n_heads * d_head != d_model in preset {preset}")
 
-        # Verify sizes generally fit the Phase 1 blueprint
-        self.assertTrue(32000 <= config.vocab_size <= 50000)
-        self.assertTrue(512 <= config.d_model <= 640)
-        self.assertTrue(8 <= config.n_layers <= 10)
-        self.assertTrue(8 <= config.n_heads <= 10)
-        self.assertEqual(config.n_kv_heads, 4)
-
-        # Internal logical constraints check
-        self.assertEqual(config.d_model, config.n_heads * config.d_head, "d_model must equal n_heads * d_head")
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

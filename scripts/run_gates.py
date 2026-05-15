@@ -80,10 +80,15 @@ def test_checkpoint_resume(device):
     shutil.rmtree(save_dir, ignore_errors=True)
 
 if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Starting Pre-train Gates on {device}...")
+    import sys
+    try:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Starting Pre-train Gates on {device}...")
 
-    test_smoke_nan(device)
-    test_checkpoint_resume(device)
+        test_smoke_nan(device)
+        test_checkpoint_resume(device)
 
-    print("\nAll Go/No-Go Gates PASSED. Safe for 10k-step pilot and full pre-training.")
+        print("\nAll Go/No-Go Gates PASSED. Safe for 10k-step pilot and full pre-training.")
+    except Exception as e:
+        print(f"\nGATES FAILED: {e}")
+        sys.exit(1)

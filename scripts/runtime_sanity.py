@@ -35,8 +35,7 @@ def run_sanity(device_name: str, use_compile: bool):
     try:
         model(x, labels=x)
     except Exception as e:
-        print(f"[{device_name}] Warmup FAILED: {e}")
-        return
+        raise RuntimeError(f"[{device_name}] Warmup FAILED: {e}") from e
 
     # Benchmark Forward
     start = time.time()
@@ -44,9 +43,12 @@ def run_sanity(device_name: str, use_compile: bool):
         out = model(x, labels=x)
         fw_time = time.time() - start
         print(f"[{device_name}] Forward Pass: {fw_time:.4f}s | Loss: {out.loss.item():.4f}")
+
+        # Verify precision/dtype matches parameter expectations (FP32 baseline fallback for CPU)
+        expected_dtype = next(model.parameters()).dtype
+        assert out.logits.dtype in [expected_dtype, torch.float32], f"Unexpected output dtype {out.logits.dtype}"
     except Exception as e:
-        print(f"[{device_name}] Forward FAILED: {e}")
-        return
+        raise RuntimeError(f"[{device_name}] Forward FAILED: {e}") from e
 
     # Benchmark Backward
     start = time.time()
@@ -54,9 +56,16 @@ def run_sanity(device_name: str, use_compile: bool):
         out.loss.backward()
         bw_time = time.time() - start
         print(f"[{device_name}] Backward Pass: {bw_time:.4f}s")
+
+        # Verify gradients populated
+        has_grad = False
+        for p in model.parameters():
+            if p.grad is not None:
+                has_grad = True
+                break
+        assert has_grad, f"[{device_name}] Backward FAILED: No gradients populated."
     except Exception as e:
-        print(f"[{device_name}] Backward FAILED: {e}")
-        return
+        raise RuntimeError(f"[{device_name}] Backward FAILED: {e}") from e
 
     print(f"[{device_name}] Status: PASSED")
 
